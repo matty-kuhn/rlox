@@ -15,7 +15,10 @@ macro_rules! err_msg {
         format!("[line: {}] Error: {}", $line_nr, $message)
     };
     ($line_nr: expr, $message: expr, $col_nr: expr) => {
-        format!("[line: {} column: {}] Error: {}", $line_nr, $col_nr, $message)
+        format!(
+            "[line: {} column: {}] Error: {}",
+            $line_nr, $col_nr, $message
+        )
     };
     ($line_nr: expr, $message: expr, $ctx: block) => {
         format!("[line: {}] Error: {}\n\t\t{}", $line_nr, $message, $ctx)

@@ -8,7 +8,7 @@ use file_runner::FileRunner;
 use repl::{Repl, ReplCtx};
 use std::path::PathBuf;
 
-use crate::scanner::{ctx::Started, Scanner};
+use crate::scanner::Scanner;
 
 #[derive(Parser, Debug)]
 pub struct InterpreterArgs {
@@ -36,12 +36,14 @@ impl Interpreter {
 }
 
 pub(crate) fn run(code: &str, ctx: Option<&mut ReplCtx>) -> Result<()> {
-    let mut scanner: Scanner<Started> = Scanner::new(code).into_iter();
+    let mut scanner = Scanner::new(code).into_iter();
 
     while let Some(token) = scanner.next() {
         let token = token.context("Lexing Error")?;
         println!("{token}");
     }
+
+    let scanner = scanner.finish();
 
     if scanner.has_errors() {
         for error in scanner.errors() {

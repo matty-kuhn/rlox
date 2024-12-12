@@ -1,31 +1,27 @@
 use crate::err_msg;
 use anyhow::{anyhow, Result};
-use ctx::{CtxState, Parsing, ScannerCtx};
+use ctx::{Finished, NeedsToken, ScannerCtx};
 use token::{Token, TokenType};
 
 pub(crate) mod ctx;
 pub(crate) mod token;
 
-pub(crate) struct Scanner<'code, State>
-where
-    State: CtxState,
-{
+pub(crate) struct Scanner<'code, State> {
     code: &'code str,
     ctx: ScannerCtx<State>,
 }
 
-/// Functions available in any state
-impl<'code, State> Scanner<'code, State>
-where
-    State: CtxState,
-{
+impl<'code> Scanner<'code, NeedsToken> {
     pub fn new(code: &'code str) -> Self {
         Self {
             code,
-            ctx: ScannerCtx::new()
+            ctx: ScannerCtx::new(),
         }
     }
+}
 
+/// Functions available in any state
+impl<'code> Scanner<'code, Finished> {
     pub fn has_errors(&self) -> bool {
         !self.ctx.errors.is_empty()
     }
@@ -35,10 +31,7 @@ where
     }
 }
 
-impl<'code, State> Scanner<'code, State>
-where
-    State: Parsing,
-{
+impl<'code> Scanner<'code, NeedsToken> {
     fn get_next_token(&mut self) -> Result<Token> {
         while let Some(curr_char) = self.code.get(self.ctx.cursor..self.ctx.cursor) {
             self.ctx.cursor += 1;
@@ -69,12 +62,16 @@ where
 
         todo!()
     }
+
+    pub fn finish(self) -> Scanner<'code, Finished> {
+        Scanner::<'code, Finished> {
+            code: self.code,
+            ctx: self.ctx.finish(),
+        }
+    }
 }
 
-impl<State> Iterator for Scanner<'_, State>
-where
-    State: Parsing,
-{
+impl Iterator for Scanner<'_, NeedsToken> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
