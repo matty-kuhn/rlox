@@ -39,15 +39,13 @@ pub(crate) fn run(code: &str, ctx: Option<&mut ReplCtx>) -> Result<()> {
     let mut scanner = Scanner::new(code).into_iter();
 
     while let Some(token) = scanner.next() {
-        let token = token.context("Lexing Error")?;
+        let token = token;
         println!("{token}");
     }
 
-    let scanner = scanner.finish();
-
     if scanner.has_errors() {
         for error in scanner.errors() {
-            eprintln!("error");
+            eprintln!("{error}");
         }
         bail!("Errors during lexing");
     }

@@ -1,22 +1,30 @@
 use std::{fmt::Display, rc::Rc};
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     tag: TokenType,
     lexeme: Rc<str>,
+    literal: Value,
     // line: usize,
 }
 
 impl Token {
     pub fn new(tag: TokenType, lexeme: &str) -> Self {
+        let rc: Rc<str> = Rc::from(lexeme);
+        let literal = if let Ok(num) = lexeme.parse() {
+            Value::Num(num)
+        } else {
+            Value::String(rc.clone())
+        };
         Self {
             tag,
-            lexeme: Rc::from(lexeme),
+            lexeme: rc,
+            literal,
         }
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -117,4 +125,11 @@ impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Token: {} Type: {}", self.lexeme, self.tag)
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Value {
+    String(Rc<str>),
+    Num(f64),
+    None,
 }

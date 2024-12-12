@@ -5,7 +5,7 @@
 ///
 /// Example:
 /// ```
-/// # use rlox::err_msg;
+/// # use rlox_lib::err_msg;
 /// // will output: "[line: 42] Error: missing comma!"
 /// let error = err_msg!(42, "missing comma!");
 /// assert_eq!(error, "[line: 42] Error: missing comma!");
