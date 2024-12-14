@@ -62,14 +62,53 @@ impl<'code> Scanner<'code> {
         None
     }
 
-    fn want_number(&mut self, first: char) -> Option<Token> {
-        let mut builder = String::new();
-        todo!()
+    fn is_alpha(c: char) -> bool {
+        c.is_ascii_alphabetic() || c == '_'
+    }
 
-        // self.error(&format!(
-        //     "invalid character found in number: ",
-        // ));
-        // None
+    fn want_number(&mut self, first: char) -> Token {
+        let mut builder = String::new();
+        builder.push(first);
+        while let Some(next) = self.peek(0) {
+            if next.is_digit(10) {
+                builder.push(next);
+                self.advance();
+            } else if next == '.' {
+                if let Some(next_next) = self.peek(1) {
+                    if next_next.is_digit(10) {
+                        builder.push(next);
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        Token::new(TokenType::Number, &builder)
+    }
+
+    fn want_ident(&mut self, first: char) -> Token {
+        let mut builder = String::new();
+        builder.push(first);
+        while let Some(next) = self.peek(0) {
+            if Self::is_alpha(next) {
+                builder.push(next);
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        let tok_type = if let Some(tok) = TokenType::from_str(&builder) {
+            tok
+        } else {
+            TokenType::Identifier
+        };
+        Token::new(TokenType::Identifier, &builder)
     }
 
     fn get_next_token(&mut self) -> Option<Token> {
@@ -86,7 +125,7 @@ impl<'code> Scanner<'code> {
                 '+' => return Some(Token::new(TokenType::Plus, &format!("{curr_char}"))),
                 ';' => return Some(Token::new(TokenType::Semicolon, &format!("{curr_char}"))),
                 '*' => return Some(Token::new(TokenType::Star, &format!("{curr_char}"))),
-                num if num >= '0' && num <= '9' => return self.want_number(num),
+                num if num >= '0' && num <= '9' => return Some(self.want_number(num)),
                 '!' => {
                     let Some(next) = self.peek(0) else {
                         return Some(Token::new(TokenType::Bang, &format!("{curr_char}")));
@@ -164,7 +203,7 @@ impl<'code> Scanner<'code> {
                     self.ctx.newline();
                 }
                 x => {
-                    self.error(&format!("unrecognized token: {x}"));
+                    self.want_ident(x);
                 }
             }
         }
@@ -223,6 +262,44 @@ mod test {
         ];
         let mut scanner = Scanner::new(code).into_iter();
 
+        let mut idx = 0;
+        while let Some(token) = scanner.get_next_token() {
+            assert_eq!(exp[idx], token);
+            idx += 1;
+        }
+    }
+
+    #[test]
+    fn test_simple_numbers() {
+        let code = r#"123 123.456 0.123"#;
+        let exp = vec![
+            Token::new(TokenType::Number, "123"),
+            Token::new(TokenType::Number, "123.456"),
+            Token::new(TokenType::Number, "0.123"),
+        ];
+        let mut scanner = Scanner::new(code).into_iter();
+        let mut idx = 0;
+        while let Some(token) = scanner.get_next_token() {
+            assert_eq!(exp[idx], token);
+            idx += 1;
+        }
+    }
+
+    #[test]
+    fn test_simple_idents() {
+        let code = r#"foo bar baz if and fun else or nil"#;
+        let exp = vec![
+            Token::new(TokenType::Identifier, "foo"),
+            Token::new(TokenType::Identifier, "bar"),
+            Token::new(TokenType::Identifier, "baz"),
+            Token::new(TokenType::If, "if"),
+            Token::new(TokenType::And, "and"),
+            Token::new(TokenType::Fun, "fun"),
+            Token::new(TokenType::Else, "else"),
+            Token::new(TokenType::Or, "or"),
+            Token::new(TokenType::Nil, "nil"),
+        ];
+        let mut scanner = Scanner::new(code).into_iter();
         let mut idx = 0;
         while let Some(token) = scanner.get_next_token() {
             assert_eq!(exp[idx], token);

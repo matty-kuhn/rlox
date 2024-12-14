@@ -75,6 +75,70 @@ pub enum TokenType {
     Eof,
 }
 
+impl TokenType {
+    pub(crate) fn is_keyword(&self) -> bool {
+        matches!(
+            self,
+            TokenType::And
+                | TokenType::Class
+                | TokenType::Else
+                | TokenType::False
+                | TokenType::Fun
+                | TokenType::For
+                | TokenType::If
+                | TokenType::Nil
+                | TokenType::Or
+                | TokenType::Print
+                | TokenType::Return
+                | TokenType::Super
+                | TokenType::This
+                | TokenType::True
+                | TokenType::Var
+                | TokenType::While
+        )
+    }
+
+    pub(crate) fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "(" => Some(TokenType::LeftParen),
+            ")" => Some(TokenType::RightParen),
+            "{" => Some(TokenType::LeftBrace),
+            "}" => Some(TokenType::RightBrace),
+            "," => Some(TokenType::Comma),
+            "." => Some(TokenType::Dot),
+            "-" => Some(TokenType::Minus),
+            "+" => Some(TokenType::Plus),
+            ";" => Some(TokenType::Semicolon),
+            "*" => Some(TokenType::Star),
+            "!" => Some(TokenType::Bang),
+            "!=" => Some(TokenType::BangEqual),
+            "=" => Some(TokenType::Equal),
+            "==" => Some(TokenType::EqualEqual),
+            ">" => Some(TokenType::Greater),
+            ">=" => Some(TokenType::GreaterEqual),
+            "<" => Some(TokenType::Less),
+            "<=" => Some(TokenType::LessEqual),
+            "and" => Some(TokenType::And),
+            "class" => Some(TokenType::Class),
+            "else" => Some(TokenType::Else),
+            "false" => Some(TokenType::False),
+            "fun" => Some(TokenType::Fun),
+            "for" => Some(TokenType::For),
+            "if" => Some(TokenType::If),
+            "nil" => Some(TokenType::Nil),
+            "or" => Some(TokenType::Or),
+            "print" => Some(TokenType::Print),
+            "return" => Some(TokenType::Return),
+            "super" => Some(TokenType::Super),
+            "this" => Some(TokenType::This),
+            "true" => Some(TokenType::True),
+            "var" => Some(TokenType::Var),
+            "while" => Some(TokenType::While),
+            _ => None,
+        }
+    }
+}
+
 impl Display for TokenType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
