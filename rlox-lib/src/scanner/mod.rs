@@ -1,21 +1,20 @@
 use crate::err_msg;
-use anyhow::{anyhow, bail, Result};
+use anyhow::anyhow;
 use ctx::ScannerCtx;
-use std::{iter::Peekable, str::Chars};
 use token::{Token, TokenType};
 
 pub(crate) mod ctx;
 pub(crate) mod token;
 
 pub(crate) struct Scanner<'code> {
-    code: Peekable<Chars<'code>>,
+    code: &'code str,
     ctx: ScannerCtx,
 }
 
 impl<'code> Scanner<'code> {
     pub fn new(code: &'code str) -> Self {
         Self {
-            code: code.chars().peekable(),
+            code,
             ctx: ScannerCtx::new(),
         }
     }
@@ -30,10 +29,27 @@ impl<'code> Scanner<'code> {
     pub fn errors(&self) -> &[anyhow::Error] {
         &self.ctx.errors
     }
+
+    fn advance(&mut self) -> Option<char> {
+        let next = self.code.chars().nth(self.ctx.cursor);
+        if next.is_none() {
+            return None;
+        }
+        self.ctx.cursor += 1;
+        if next == Some('\n') {
+            self.ctx.newline();
+        }
+        next
+    }
+
+    fn peek(&self, n: usize) -> Option<char> {
+        self.code.chars().nth(self.ctx.cursor + n)
+    }
+
     fn string_started(&mut self) -> Option<Token> {
         let start = (self.ctx.curr_line, self.ctx.curr_col);
         let mut builder = String::new();
-        while let Some(curr_char) = self.code.next() {
+        while let Some(curr_char) = self.advance() {
             if curr_char == '"' {
                 return Some(Token::new(TokenType::String, &builder));
             }
@@ -57,7 +73,7 @@ impl<'code> Scanner<'code> {
     }
 
     fn get_next_token(&mut self) -> Option<Token> {
-        while let Some(curr_char) = self.code.next() {
+        while let Some(curr_char) = self.advance() {
             match curr_char {
                 '"' => return self.string_started(),
                 '(' => return Some(Token::new(TokenType::LeftParen, &format!("{curr_char}"))),
@@ -72,11 +88,11 @@ impl<'code> Scanner<'code> {
                 '*' => return Some(Token::new(TokenType::Star, &format!("{curr_char}"))),
                 num if num >= '0' && num <= '9' => return self.want_number(num),
                 '!' => {
-                    let Some(next) = self.code.peek() else {
+                    let Some(next) = self.peek(0) else {
                         return Some(Token::new(TokenType::Bang, &format!("{curr_char}")));
                     };
-                    if next == &'=' {
-                        let next = self.code.next().unwrap();
+                    if next == '=' {
+                        let next = self.advance().unwrap();
                         return Some(Token::new(
                             TokenType::BangEqual,
                             &format!("{curr_char}{next}"),
@@ -86,11 +102,11 @@ impl<'code> Scanner<'code> {
                     }
                 }
                 '=' => {
-                    let Some(next) = self.code.peek() else {
+                    let Some(next) = self.peek(0) else {
                         return Some(Token::new(TokenType::Equal, &format!("{curr_char}")));
                     };
-                    if next == &'=' {
-                        let next = self.code.next().unwrap();
+                    if next == '=' {
+                        let next = self.advance().unwrap();
                         return Some(Token::new(
                             TokenType::EqualEqual,
                             &format!("{curr_char}{next}"),
@@ -100,11 +116,11 @@ impl<'code> Scanner<'code> {
                     }
                 }
                 '>' => {
-                    let Some(next) = self.code.peek() else {
+                    let Some(next) = self.peek(0) else {
                         return Some(Token::new(TokenType::Greater, &format!("{curr_char}")));
                     };
-                    if next == &'=' {
-                        let next = self.code.next().unwrap();
+                    if next == '=' {
+                        let next = self.advance().unwrap();
                         return Some(Token::new(
                             TokenType::GreaterEqual,
                             &format!("{curr_char}{next}"),
@@ -114,11 +130,11 @@ impl<'code> Scanner<'code> {
                     }
                 }
                 '<' => {
-                    let Some(next) = self.code.peek() else {
+                    let Some(next) = self.peek(0) else {
                         return Some(Token::new(TokenType::Less, &format!("{curr_char}")));
                     };
-                    if next == &'=' {
-                        let next = self.code.next().unwrap();
+                    if next == '=' {
+                        let next = self.advance().unwrap();
                         return Some(Token::new(
                             TokenType::LessEqual,
                             &format!("{curr_char}{next}"),
@@ -128,10 +144,10 @@ impl<'code> Scanner<'code> {
                     }
                 }
                 '/' => {
-                    if let Some(next) = self.code.peek() {
-                        if next == &'/' {
+                    if let Some(next) = self.peek(0) {
+                        if next == '/' {
                             // spin until end of line
-                            while let Some(stuff) = self.code.next() {
+                            while let Some(stuff) = self.advance() {
                                 if stuff == '\n' {
                                     break;
                                 }
@@ -170,7 +186,7 @@ impl Iterator for Scanner<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // basic peek to see if there are enough chars left to look at
-        if self.code.peek().is_none() {
+        if self.peek(0).is_none() {
             None
         } else {
             self.get_next_token()
@@ -208,7 +224,7 @@ mod test {
         let mut scanner = Scanner::new(code).into_iter();
 
         let mut idx = 0;
-        while let Some(token) = scanner.next() {
+        while let Some(token) = scanner.get_next_token() {
             assert_eq!(exp[idx], token);
             idx += 1;
         }
