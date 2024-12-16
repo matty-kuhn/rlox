@@ -1,26 +1,51 @@
 use std::{fmt::Display, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Token {
-    tag: TokenType,
-    lexeme: Rc<str>,
-    literal: Value,
+pub(crate) struct Token {
+    pub(crate) tag: TokenType,
+    pub(crate) lexeme: Rc<str>,
+    pub(crate) literal: Value,
     // line: usize,
 }
 
 impl Token {
-    pub fn new(tag: TokenType, lexeme: &str) -> Self {
+    pub(crate) fn new(tag: TokenType, lexeme: &str, literal: bool) -> Self {
         let rc: Rc<str> = Rc::from(lexeme);
-        let literal = if let Ok(num) = lexeme.parse() {
-            Value::Num(num)
+        let literal = if literal {
+            if let Ok(num) = lexeme.parse() {
+                Value::Num(num)
+            } else {
+                Value::String(rc.clone())
+            }
         } else {
-            Value::String(rc.clone())
+            Value::None
         };
         Self {
             tag,
             lexeme: rc,
             literal,
         }
+    }
+
+    pub(crate) fn is_equality(&self) -> bool {
+        matches!(self.tag, TokenType::EqualEqual) || matches!(self.tag, TokenType::BangEqual)
+    }
+
+    pub(crate) fn is_comp(&self) -> bool {
+        matches!(self.tag, TokenType::Greater)
+            || matches!(self.tag, TokenType::GreaterEqual)
+            || matches!(self.tag, TokenType::Less)
+            || matches!(self.tag, TokenType::LessEqual)
+    }
+
+    pub(crate) fn is_term(&self) -> bool {
+        matches!(self.tag, TokenType::Minus) || matches!(self.tag, TokenType::Plus)
+    }
+    pub(crate) fn is_factor(&self) -> bool {
+        matches!(self.tag, TokenType::Slash) || matches!(self.tag, TokenType::Star)
+    }
+    pub(crate) fn is_unary(&self) -> bool {
+        matches!(self.tag, TokenType::Bang) || matches!(self.tag, TokenType::Minus)
     }
 }
 
@@ -196,4 +221,14 @@ pub(crate) enum Value {
     String(Rc<str>),
     Num(f64),
     None,
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::String(s) => write!(f, "\"{s}\""),
+            Value::Num(num) => write!(f, "{num}"),
+            Value::None => write!(f, "nil"),
+        }
+    }
 }

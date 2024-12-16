@@ -1,10 +1,11 @@
-use crate::err_msg;
+use crate::{
+    err_msg,
+    tokens::{Token, TokenType},
+};
 use anyhow::anyhow;
 use ctx::ScannerCtx;
-use token::{Token, TokenType};
 
 pub(crate) mod ctx;
-pub(crate) mod token;
 
 pub(crate) struct Scanner<'code> {
     code: &'code str,
@@ -22,6 +23,18 @@ impl<'code> Scanner<'code> {
 
 /// Functions available in any state
 impl<'code> Scanner<'code> {
+    pub fn is_finished(&self) -> bool {
+        self.ctx.cursor == self.code.len()
+    }
+
+    pub fn curr_line(&self) -> usize {
+        self.ctx.curr_line.into()
+    }
+
+    pub fn curr_col(&self) -> usize {
+        self.ctx.curr_col
+    }
+
     pub fn has_errors(&self) -> bool {
         !self.ctx.errors.is_empty()
     }
@@ -51,7 +64,7 @@ impl<'code> Scanner<'code> {
         let mut builder = String::new();
         while let Some(curr_char) = self.advance() {
             if curr_char == '"' {
-                return Some(Token::new(TokenType::String, &builder));
+                return Some(Token::new(TokenType::String, &builder, true));
             }
             builder.push(curr_char);
         }
@@ -89,7 +102,7 @@ impl<'code> Scanner<'code> {
             }
         }
 
-        Token::new(TokenType::Number, &builder)
+        Token::new(TokenType::Number, &builder, true)
     }
 
     fn want_ident(&mut self, first: char) -> Token {
@@ -108,78 +121,120 @@ impl<'code> Scanner<'code> {
         } else {
             TokenType::Identifier
         };
-        Token::new(TokenType::Identifier, &builder)
+        Token::new(tok_type, &builder, false)
     }
 
     fn get_next_token(&mut self) -> Option<Token> {
         while let Some(curr_char) = self.advance() {
             match curr_char {
                 '"' => return self.string_started(),
-                '(' => return Some(Token::new(TokenType::LeftParen, &format!("{curr_char}"))),
-                ')' => return Some(Token::new(TokenType::RightParen, &format!("{curr_char}"))),
-                '{' => return Some(Token::new(TokenType::LeftBrace, &format!("{curr_char}"))),
-                '}' => return Some(Token::new(TokenType::RightBrace, &format!("{curr_char}"))),
-                ',' => return Some(Token::new(TokenType::Comma, &format!("{curr_char}"))),
-                '.' => return Some(Token::new(TokenType::Dot, &format!("{curr_char}"))),
-                '-' => return Some(Token::new(TokenType::Minus, &format!("{curr_char}"))),
-                '+' => return Some(Token::new(TokenType::Plus, &format!("{curr_char}"))),
-                ';' => return Some(Token::new(TokenType::Semicolon, &format!("{curr_char}"))),
-                '*' => return Some(Token::new(TokenType::Star, &format!("{curr_char}"))),
+                '(' => {
+                    return Some(Token::new(
+                        TokenType::LeftParen,
+                        &format!("{curr_char}"),
+                        false,
+                    ))
+                }
+                ')' => {
+                    return Some(Token::new(
+                        TokenType::RightParen,
+                        &format!("{curr_char}"),
+                        false,
+                    ))
+                }
+                '{' => {
+                    return Some(Token::new(
+                        TokenType::LeftBrace,
+                        &format!("{curr_char}"),
+                        false,
+                    ))
+                }
+                '}' => {
+                    return Some(Token::new(
+                        TokenType::RightBrace,
+                        &format!("{curr_char}"),
+                        false,
+                    ))
+                }
+                ',' => return Some(Token::new(TokenType::Comma, &format!("{curr_char}"), false)),
+                '.' => return Some(Token::new(TokenType::Dot, &format!("{curr_char}"), false)),
+                '-' => return Some(Token::new(TokenType::Minus, &format!("{curr_char}"), false)),
+                '+' => return Some(Token::new(TokenType::Plus, &format!("{curr_char}"), false)),
+                ';' => {
+                    return Some(Token::new(
+                        TokenType::Semicolon,
+                        &format!("{curr_char}"),
+                        false,
+                    ))
+                }
+                '*' => return Some(Token::new(TokenType::Star, &format!("{curr_char}"), false)),
                 num if num >= '0' && num <= '9' => return Some(self.want_number(num)),
                 '!' => {
                     let Some(next) = self.peek(0) else {
-                        return Some(Token::new(TokenType::Bang, &format!("{curr_char}")));
+                        return Some(Token::new(TokenType::Bang, &format!("{curr_char}"), false));
                     };
                     if next == '=' {
                         let next = self.advance().unwrap();
                         return Some(Token::new(
                             TokenType::BangEqual,
                             &format!("{curr_char}{next}"),
+                            false,
                         ));
                     } else {
-                        return Some(Token::new(TokenType::Bang, &format!("{curr_char}")));
+                        return Some(Token::new(TokenType::Bang, &format!("{curr_char}"), false));
                     }
                 }
                 '=' => {
                     let Some(next) = self.peek(0) else {
-                        return Some(Token::new(TokenType::Equal, &format!("{curr_char}")));
+                        return Some(Token::new(TokenType::Equal, &format!("{curr_char}"), false));
                     };
                     if next == '=' {
                         let next = self.advance().unwrap();
                         return Some(Token::new(
                             TokenType::EqualEqual,
                             &format!("{curr_char}{next}"),
+                            false,
                         ));
                     } else {
-                        return Some(Token::new(TokenType::Equal, &format!("{curr_char}")));
+                        return Some(Token::new(TokenType::Equal, &format!("{curr_char}"), false));
                     }
                 }
                 '>' => {
                     let Some(next) = self.peek(0) else {
-                        return Some(Token::new(TokenType::Greater, &format!("{curr_char}")));
+                        return Some(Token::new(
+                            TokenType::Greater,
+                            &format!("{curr_char}"),
+                            false,
+                        ));
                     };
                     if next == '=' {
                         let next = self.advance().unwrap();
                         return Some(Token::new(
                             TokenType::GreaterEqual,
                             &format!("{curr_char}{next}"),
+                            false,
                         ));
                     } else {
-                        return Some(Token::new(TokenType::Greater, &format!("{curr_char}")));
+                        return Some(Token::new(
+                            TokenType::Greater,
+                            &format!("{curr_char}"),
+                            false,
+                        ));
                     }
                 }
                 '<' => {
                     let Some(next) = self.peek(0) else {
-                        return Some(Token::new(TokenType::Less, &format!("{curr_char}")));
+                        return Some(Token::new(TokenType::Less, &format!("{curr_char}"), false));
                     };
                     if next == '=' {
                         let next = self.advance().unwrap();
                         return Some(Token::new(
                             TokenType::LessEqual,
                             &format!("{curr_char}{next}"),
+                            false,
                         ));
                     } else {
-                        return Some(Token::new(TokenType::Less, &format!("{curr_char}")));
+                        return Some(Token::new(TokenType::Less, &format!("{curr_char}"), false));
                     }
                 }
                 '/' => {
@@ -192,10 +247,14 @@ impl<'code> Scanner<'code> {
                                 }
                             }
                         } else {
-                            return Some(Token::new(TokenType::Slash, &format!("{curr_char}")));
+                            return Some(Token::new(
+                                TokenType::Slash,
+                                &format!("{curr_char}"),
+                                false,
+                            ));
                         }
                     } else {
-                        return Some(Token::new(TokenType::Slash, &format!("{curr_char}")));
+                        return Some(Token::new(TokenType::Slash, &format!("{curr_char}"), false));
                     }
                 }
                 ' ' | '\r' | '\t' => {}
@@ -203,12 +262,12 @@ impl<'code> Scanner<'code> {
                     self.ctx.newline();
                 }
                 x => {
-                    self.want_ident(x);
+                    return Some(self.want_ident(x));
                 }
             }
         }
 
-        None
+        Some(Token::new(TokenType::Eof, "", false))
     }
 
     fn error(&mut self, err: &str) {
@@ -225,7 +284,7 @@ impl Iterator for Scanner<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // basic peek to see if there are enough chars left to look at
-        if self.peek(0).is_none() {
+        if self.is_finished() {
             None
         } else {
             self.get_next_token()
@@ -243,67 +302,82 @@ mod test {
 (( )){} // grouping stuff
 !*+-/=<> <= == // operators"#;
         let exp = vec![
-            Token::new(TokenType::LeftParen, "("),
-            Token::new(TokenType::LeftParen, "("),
-            Token::new(TokenType::RightParen, ")"),
-            Token::new(TokenType::RightParen, ")"),
-            Token::new(TokenType::LeftBrace, "{"),
-            Token::new(TokenType::RightBrace, "}"),
-            Token::new(TokenType::Bang, "!"),
-            Token::new(TokenType::Star, "*"),
-            Token::new(TokenType::Plus, "+"),
-            Token::new(TokenType::Minus, "-"),
-            Token::new(TokenType::Slash, "/"),
-            Token::new(TokenType::Equal, "="),
-            Token::new(TokenType::Less, "<"),
-            Token::new(TokenType::Greater, ">"),
-            Token::new(TokenType::LessEqual, "<="),
-            Token::new(TokenType::EqualEqual, "=="),
+            Token::new(TokenType::LeftParen, "(", false),
+            Token::new(TokenType::LeftParen, "(", false),
+            Token::new(TokenType::RightParen, ")", false),
+            Token::new(TokenType::RightParen, ")", false),
+            Token::new(TokenType::LeftBrace, "{", false),
+            Token::new(TokenType::RightBrace, "}", false),
+            Token::new(TokenType::Bang, "!", false),
+            Token::new(TokenType::Star, "*", false),
+            Token::new(TokenType::Plus, "+", false),
+            Token::new(TokenType::Minus, "-", false),
+            Token::new(TokenType::Slash, "/", false),
+            Token::new(TokenType::Equal, "=", false),
+            Token::new(TokenType::Less, "<", false),
+            Token::new(TokenType::Greater, ">", false),
+            Token::new(TokenType::LessEqual, "<=", false),
+            Token::new(TokenType::EqualEqual, "==", false),
+            Token::new(TokenType::Eof, "", false),
         ];
         let mut scanner = Scanner::new(code).into_iter();
 
         let mut idx = 0;
         while let Some(token) = scanner.get_next_token() {
             assert_eq!(exp[idx], token);
+            if token.tag == TokenType::Eof {
+                break;
+            }
             idx += 1;
         }
+        assert!(scanner.is_finished());
     }
 
     #[test]
     fn test_simple_numbers() {
         let code = r#"123 123.456 0.123"#;
         let exp = vec![
-            Token::new(TokenType::Number, "123"),
-            Token::new(TokenType::Number, "123.456"),
-            Token::new(TokenType::Number, "0.123"),
+            Token::new(TokenType::Number, "123", true),
+            Token::new(TokenType::Number, "123.456", true),
+            Token::new(TokenType::Number, "0.123", true),
+            Token::new(TokenType::Eof, "", false),
         ];
         let mut scanner = Scanner::new(code).into_iter();
         let mut idx = 0;
         while let Some(token) = scanner.get_next_token() {
             assert_eq!(exp[idx], token);
+            if token.tag == TokenType::Eof {
+                break;
+            }
             idx += 1;
         }
+        assert!(scanner.is_finished());
     }
 
     #[test]
     fn test_simple_idents() {
         let code = r#"foo bar baz if and fun else or nil"#;
         let exp = vec![
-            Token::new(TokenType::Identifier, "foo"),
-            Token::new(TokenType::Identifier, "bar"),
-            Token::new(TokenType::Identifier, "baz"),
-            Token::new(TokenType::If, "if"),
-            Token::new(TokenType::And, "and"),
-            Token::new(TokenType::Fun, "fun"),
-            Token::new(TokenType::Else, "else"),
-            Token::new(TokenType::Or, "or"),
-            Token::new(TokenType::Nil, "nil"),
+            Token::new(TokenType::Identifier, "foo", false),
+            Token::new(TokenType::Identifier, "bar", false),
+            Token::new(TokenType::Identifier, "baz", false),
+            Token::new(TokenType::If, "if", false),
+            Token::new(TokenType::And, "and", false),
+            Token::new(TokenType::Fun, "fun", false),
+            Token::new(TokenType::Else, "else", false),
+            Token::new(TokenType::Or, "or", false),
+            Token::new(TokenType::Nil, "nil", false),
+            Token::new(TokenType::Eof, "", false),
         ];
         let mut scanner = Scanner::new(code).into_iter();
         let mut idx = 0;
         while let Some(token) = scanner.get_next_token() {
             assert_eq!(exp[idx], token);
+            if token.tag == TokenType::Eof {
+                break;
+            }
             idx += 1;
         }
+        assert!(scanner.is_finished());
     }
 }
