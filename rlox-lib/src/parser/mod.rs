@@ -3,18 +3,18 @@ use anyhow::{bail, Result};
 use crate::{
     ast::{Bin, Expr, Lit, Un},
     err_msg,
-    scanner::Scanner,
+    scanner::TokenInfo,
     tokens::{Token, TokenType},
 };
 
-struct Parser<'code> {
+struct Parser {
     cursor: usize,
-    scanner: Scanner<'code>,
+    tokens: TokenInfo,
 }
 
-impl<'code> Parser<'code> {
-    pub fn new(scanner: Scanner<'code>) -> Self {
-        Self { cursor: 0, scanner }
+impl Parser {
+    pub fn new(tokens: TokenInfo) -> Self {
+        Self { cursor: 0, tokens }
     }
 
     pub fn parse(&mut self) -> Option<Expr> {
@@ -23,16 +23,16 @@ impl<'code> Parser<'code> {
 
     fn synchronize(&mut self) {
         self.advance();
-        while let Some(curr) = self.scanner.nth(self.cursor) {
-            if curr.tag == TokenType::Semicolon
-                || curr.tag == TokenType::Class
-                || curr.tag == TokenType::Fun
-                || curr.tag == TokenType::Var
-                || curr.tag == TokenType::For
-                || curr.tag == TokenType::If
-                || curr.tag == TokenType::While
-                || curr.tag == TokenType::Print
-                || curr.tag == TokenType::Return
+        while let Some(curr_tag) = self.tokens.tags.get(self.cursor) {
+            if curr_tag == &TokenType::Semicolon
+                || curr_tag == &TokenType::Class
+                || curr_tag == &TokenType::Fun
+                || curr_tag == &TokenType::Var
+                || curr_tag == &TokenType::For
+                || curr_tag == &TokenType::If
+                || curr_tag == &TokenType::While
+                || curr_tag == &TokenType::Print
+                || curr_tag == &TokenType::Return
             {
                 return;
             }
@@ -40,30 +40,31 @@ impl<'code> Parser<'code> {
         }
     }
 
-    fn advance(&mut self) -> Token {
-        if let Some(tok) = self.scanner.nth(self.cursor) {
+    fn advance(&mut self) -> &Token {
+        if let Some(tok) = self.tokens.tokens.get(self.cursor) {
             self.cursor += 1;
             return tok;
         }
-        return self
-            .scanner
-            .nth(self.cursor - 1)
-            .expect("should not yeat have reached end");
+        self.tokens
+            .tokens
+            .get(self.cursor - 1)
+            .expect("should not yeat have reached end")
     }
 
     fn equality(&mut self) -> Result<Expr> {
         let mut expr = self.comparison()?;
 
-        while let Some(tok) = self.scanner.nth(self.cursor) {
-            if !tok.is_equality() {
+        while self.cursor < self.tokens.tokens.len() {
+            if !self.tokens.tags[self.cursor].is_equality() {
                 break;
             }
+            let curr = self.cursor;
             self.advance();
             // we have an equality sign
             let right = self.comparison()?;
             expr = Expr::Binary(Bin {
                 left: expr.into(),
-                op: (&tok).into(),
+                op: (&self.tokens.tags[curr]).into(),
                 right: right.into(),
             });
         }
@@ -74,15 +75,16 @@ impl<'code> Parser<'code> {
     fn comparison(&mut self) -> Result<Expr> {
         let mut expr = self.term()?;
 
-        while let Some(tok) = self.scanner.nth(self.cursor) {
-            if !tok.is_comp() {
+        while self.cursor < self.tokens.tokens.len() {
+            if !self.tokens.tags[self.cursor].is_comp() {
                 break;
             }
+            let curr = self.cursor;
             self.advance();
             let right = self.term()?;
             expr = Expr::Binary(Bin {
                 left: expr.into(),
-                op: (&tok).into(),
+                op: (&self.tokens.tags[curr]).into(),
                 right: right.into(),
             });
         }
@@ -93,15 +95,16 @@ impl<'code> Parser<'code> {
     fn term(&mut self) -> Result<Expr> {
         let mut expr = self.factor()?;
 
-        while let Some(tok) = self.scanner.nth(self.cursor) {
-            if !tok.is_term() {
+        while self.cursor < self.tokens.tokens.len() {
+            if !self.tokens.tags[self.cursor].is_term() {
                 break;
             }
+            let curr = self.cursor;
             self.advance();
             let right = self.factor()?;
             expr = Expr::Binary(Bin {
                 left: expr.into(),
-                op: (&tok).into(),
+                op: (&self.tokens.tags[curr]).into(),
                 right: right.into(),
             });
         }
@@ -112,15 +115,16 @@ impl<'code> Parser<'code> {
     fn factor(&mut self) -> Result<Expr> {
         let mut expr = self.unary()?;
 
-        while let Some(tok) = self.scanner.nth(self.cursor) {
-            if !tok.is_factor() {
+        while self.cursor < self.tokens.tokens.len() {
+            if !self.tokens.tags[self.cursor].is_factor() {
                 break;
             }
+            let curr = self.cursor;
             self.advance();
             let right = self.unary()?;
             expr = Expr::Binary(Bin {
                 left: expr.into(),
-                op: (&tok).into(),
+                op: (&self.tokens.tags[curr]).into(),
                 right: right.into(),
             });
         }
@@ -128,13 +132,14 @@ impl<'code> Parser<'code> {
     }
 
     fn unary(&mut self) -> Result<Expr> {
-        while let Some(tok) = self.scanner.nth(self.cursor) {
-            if !tok.is_unary() {
+        while self.cursor < self.tokens.tokens.len() {
+            let curr_tag = self.tokens.tags[self.cursor];
+            if !curr_tag.is_unary() {
                 break;
             }
             self.advance();
             let right = self.unary()?;
-            return Ok(Expr::Unary(match tok.tag {
+            return Ok(Expr::Unary(match curr_tag {
                 TokenType::Minus => Un::Minus(right.into()),
                 TokenType::Bang => Un::Bang(right.into()),
                 _ => panic!("invalid state: checked tok tag is ! or -"),
@@ -146,13 +151,17 @@ impl<'code> Parser<'code> {
     }
 
     fn primary(&mut self) -> Result<Expr> {
-        let curr = self.advance();
-        match curr.tag {
+        self.advance();
+        match self.tokens.tags[self.cursor] {
             TokenType::Nil => Ok(Expr::Literal(Lit::Nil)),
             TokenType::False => Ok(Expr::Literal(Lit::False)),
             TokenType::True => Ok(Expr::Literal(Lit::True)),
-            TokenType::Number => Ok(Expr::Literal(Lit::Num(curr.literal))),
-            TokenType::String => Ok(Expr::Literal(Lit::Str(curr.literal))),
+            TokenType::Number => Ok(Expr::Literal(Lit::Num(
+                self.tokens.tokens[self.cursor].literal.clone(),
+            ))),
+            TokenType::String => Ok(Expr::Literal(Lit::Str(
+                self.tokens.tokens[self.cursor].literal.clone(),
+            ))),
             TokenType::LeftParen => {
                 let expr = self.expression()?;
                 self.consume_next(TokenType::RightParen, "expected \")\" to close expression")?;
@@ -166,15 +175,19 @@ impl<'code> Parser<'code> {
         self.equality()
     }
 
-    fn consume_next(&mut self, tok_type: TokenType, err_ctx: &str) -> Result<Token> {
-        let Some(peek) = self.scanner.nth(self.cursor) else {
-            bail!(format!("reached EOF, {err_ctx}"));
-        };
+    fn consume_next(&mut self, tok_type: TokenType, err_ctx: &str) -> Result<&Token> {
+        if self.cursor >= self.tokens.tokens.len() {
+            bail!("unexpected EOF");
+        }
 
-        if peek.tag == tok_type {
+        if self.tokens.tags[self.cursor] == tok_type {
             return Ok(self.advance());
         }
-        let err_msg = err_msg!(self.scanner.curr_line(), err_ctx, self.scanner.curr_col());
+        let err_msg = err_msg!(
+            self.tokens.line_nrs[self.cursor],
+            err_ctx,
+            self.tokens.start_cols[self.cursor]
+        );
 
         eprintln!("{err_msg}");
 

@@ -12,7 +12,7 @@
 //!                | "+"  | "-"  | "*" | "/" ;
 
 mod printer;
-use crate::tokens::{Token, Value};
+use crate::tokens::{Token, TokenType, Value};
 use std::{fmt::Display, rc::Rc};
 
 pub(crate) trait Visitor {
@@ -64,9 +64,9 @@ pub(crate) enum Ops {
     LessEqual,
 }
 
-impl From<&Token> for Ops {
-    fn from(value: &Token) -> Self {
-        match value.tag {
+impl From<&TokenType> for Ops {
+    fn from(value: &TokenType) -> Self {
+        match value {
             crate::tokens::TokenType::LeftParen
             | crate::tokens::TokenType::RightParen
             | crate::tokens::TokenType::LeftBrace
