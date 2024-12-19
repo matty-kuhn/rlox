@@ -186,7 +186,7 @@ impl Parser {
         let err_msg = err_msg!(
             self.tokens.line_nrs[self.cursor],
             err_ctx,
-            self.tokens.start_cols[self.cursor]
+            self.tokens.end_cols[self.cursor]
         );
 
         eprintln!("{err_msg}");

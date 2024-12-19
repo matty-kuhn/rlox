@@ -44,14 +44,15 @@ impl<'code> Scanner<'code> {
     }
 
     fn advance(&mut self) -> Option<char> {
-        let next = self.code.chars().nth(self.ctx.cursor);
-        self.ctx.cursor += 1;
+        let next = self.peek(1);
         if next.is_none() {
-            return None;
+            if self.ctx.cursor == self.code.len() - 1 {
+                self.ctx.cursor += 1
+            }
+            return next;
         }
-        if next == Some('\n') {
-            self.ctx.newline();
-        }
+        self.ctx.cursor += 1;
+        self.ctx.curr_col += 1;
         next
     }
 
@@ -179,7 +180,7 @@ impl<'code> Scanner<'code> {
                     }
                 }
                 '=' => {
-                    let Some(next) = self.peek(0) else {
+                    let Some(next) = self.peek(1) else {
                         return Some((
                             TokenType::Equal,
                             Token::new(&format!("{curr_char}"), false),
@@ -219,7 +220,7 @@ impl<'code> Scanner<'code> {
                     }
                 }
                 '<' => {
-                    let Some(next) = self.peek(0) else {
+                    let Some(next) = self.peek(1) else {
                         return Some((TokenType::Less, Token::new(&format!("{curr_char}"), false)));
                     };
                     if next == '=' {
@@ -233,11 +234,13 @@ impl<'code> Scanner<'code> {
                     }
                 }
                 '/' => {
-                    if let Some(next) = self.peek(0) {
+                    if let Some(next) = self.peek(1) {
                         if next == '/' {
                             // spin until end of line
                             while let Some(stuff) = self.advance() {
                                 if stuff == '\n' {
+                                    self.advance();
+                                    self.ctx.newline();
                                     break;
                                 }
                             }
@@ -254,7 +257,9 @@ impl<'code> Scanner<'code> {
                         ));
                     }
                 }
-                ' ' | '\r' | '\t' => {}
+                ' ' | '\r' | '\t' => {
+                    self.advance();
+                }
                 '\n' => {
                     self.ctx.newline();
                 }
@@ -279,39 +284,41 @@ impl<'code> Scanner<'code> {
         let mut tokens = vec![];
         let mut tags = vec![];
         let mut line_nrs = vec![];
-        let mut start_cols = vec![];
+        let mut end_cols = vec![];
         while !self.is_finished() {
-            dbg!(self.ctx.cursor);
             let Some((tag, tok)) = self.get_next_token() else {
+                debug_assert!(tags[tags.len() - 1] == TokenType::Eof);
                 return TokenInfo {
                     tokens,
                     tags,
                     line_nrs,
-                    start_cols,
+                    end_cols,
                     errors: self.ctx.errors,
                 };
             };
             tags.push(tag);
             tokens.push(tok);
             line_nrs.push(self.ctx.curr_line);
-            start_cols.push(self.ctx.curr_col);
+            end_cols.push(self.ctx.curr_col);
             self.advance();
         }
+        debug_assert!(tags[tags.len() - 1] == TokenType::Eof);
         TokenInfo {
             tokens,
             tags,
             line_nrs,
-            start_cols,
+            end_cols,
             errors: self.ctx.errors,
         }
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct TokenInfo {
     pub(crate) tokens: Vec<Token>,
     pub(crate) tags: Vec<TokenType>,
     pub(crate) line_nrs: Vec<usize>,
-    pub(crate) start_cols: Vec<usize>,
+    pub(crate) end_cols: Vec<usize>,
     pub(crate) errors: Vec<Error>,
 }
 
@@ -363,24 +370,16 @@ mod test {
                 TokenType::EqualEqual,
                 TokenType::Eof,
             ],
-            line_nrs: vec![2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
-            start_cols: vec![0, 1, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 7, 9, 12],
+            line_nrs: vec![2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+            end_cols: vec![0, 1, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 7, 10, 13, 26],
             errors: vec![],
         };
         let scan_res = Scanner::new(code).run();
 
-        let mut idx = 0;
-        loop {
-            if idx == scan_res.tokens.len() {
-                break;
-            }
-            assert_eq!(scan_res.tokens[idx], exp.tokens[idx]);
-            assert_eq!(scan_res.tags[idx], exp.tags[idx]);
-            assert_eq!(scan_res.start_cols[idx], exp.start_cols[idx]);
-            assert_eq!(scan_res.line_nrs[idx], exp.line_nrs[idx]);
-
-            idx += 1;
-        }
+        assert_eq!(scan_res.tokens, exp.tokens);
+        assert_eq!(scan_res.tags, exp.tags);
+        assert_eq!(scan_res.end_cols, exp.end_cols);
+        assert_eq!(scan_res.line_nrs, exp.line_nrs);
         assert!(scan_res.errors.is_empty());
     }
 
