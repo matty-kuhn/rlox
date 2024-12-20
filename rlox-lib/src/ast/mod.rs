@@ -11,7 +11,7 @@
 //! operator       → "==" | "!=" | "<" | "<=" | ">" | ">="
 //!                | "+"  | "-"  | "*" | "/" ;
 
-mod printer;
+pub(crate) mod printer;
 use crate::tokens::{Token, TokenType, Value};
 use std::{fmt::Display, rc::Rc};
 
@@ -30,6 +30,7 @@ pub(crate) trait VisitorMut {
     fn visit_grouping_mut(&mut self, expr: &Rc<Expr>) -> Self::Output;
 }
 
+#[derive(Debug)]
 pub(crate) enum Lit {
     True,
     False,
@@ -38,6 +39,7 @@ pub(crate) enum Lit {
     Str(Value),
 }
 
+#[derive(Debug)]
 pub(crate) enum Un {
     Minus(Rc<Expr>),
     Bang(Rc<Expr>),
@@ -51,6 +53,7 @@ impl Un {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum Ops {
     Minus,
     Plus,
@@ -110,12 +113,14 @@ impl From<&TokenType> for Ops {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct Bin {
     pub(crate) left: Rc<Expr>,
     pub(crate) op: Ops,
     pub(crate) right: Rc<Expr>,
 }
 
+#[derive(Debug)]
 pub(crate) enum Expr {
     Literal(Lit),
     Unary(Un),

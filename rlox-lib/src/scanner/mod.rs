@@ -56,6 +56,11 @@ impl<'code> Scanner<'code> {
         next
     }
 
+    fn rewind(&mut self) {
+        self.ctx.cursor -= 1;
+        self.ctx.curr_col -= 1;
+    }
+
     fn peek(&self, n: usize) -> Option<char> {
         self.code.chars().nth(self.ctx.cursor + n)
     }
@@ -80,9 +85,8 @@ impl<'code> Scanner<'code> {
         c.is_ascii_alphabetic() || c == '_'
     }
 
-    fn want_number(&mut self, first: char) -> (TokenType, Token) {
+    fn want_number(&mut self) -> (TokenType, Token) {
         let mut builder = String::new();
-        builder.push(first);
         while let Some(next) = self.peek(0) {
             if next.is_digit(10) {
                 builder.push(next);
@@ -103,12 +107,13 @@ impl<'code> Scanner<'code> {
             }
         }
 
+        // rewind by 1
+        self.rewind();
         (TokenType::Number, Token::new(&builder, true))
     }
 
-    fn want_ident(&mut self, first: char) -> (TokenType, Token) {
+    fn want_ident(&mut self) -> (TokenType, Token) {
         let mut builder = String::new();
-        builder.push(first);
         while let Some(next) = self.peek(0) {
             if Self::is_alpha(next) {
                 builder.push(next);
@@ -122,6 +127,8 @@ impl<'code> Scanner<'code> {
         } else {
             TokenType::Identifier
         };
+        // rewind by 1
+        self.rewind();
         (tok_type, Token::new(&builder, false))
     }
 
@@ -164,9 +171,9 @@ impl<'code> Scanner<'code> {
                     ))
                 }
                 '*' => return Some((TokenType::Star, Token::new(&format!("{curr_char}"), false))),
-                num if num >= '0' && num <= '9' => return Some(self.want_number(num)),
+                num if num >= '0' && num <= '9' => return Some(self.want_number()),
                 '!' => {
-                    let Some(next) = self.peek(0) else {
+                    let Some(next) = self.peek(1) else {
                         return Some((TokenType::Bang, Token::new(&format!("{curr_char}"), false)));
                     };
                     if next == '=' {
@@ -263,8 +270,8 @@ impl<'code> Scanner<'code> {
                 '\n' => {
                     self.ctx.newline();
                 }
-                x => {
-                    return Some(self.want_ident(x));
+                _ => {
+                    return Some(self.want_ident());
                 }
             }
         }
@@ -285,7 +292,7 @@ impl<'code> Scanner<'code> {
         let mut tags = vec![];
         let mut line_nrs = vec![];
         let mut end_cols = vec![];
-        while !self.is_finished() {
+        loop {
             let Some((tag, tok)) = self.get_next_token() else {
                 debug_assert!(tags[tags.len() - 1] == TokenType::Eof);
                 return TokenInfo {
@@ -300,6 +307,9 @@ impl<'code> Scanner<'code> {
             tokens.push(tok);
             line_nrs.push(self.ctx.curr_line);
             end_cols.push(self.ctx.curr_col);
+            if tag == TokenType::Eof {
+                break;
+            }
             self.advance();
         }
         debug_assert!(tags[tags.len() - 1] == TokenType::Eof);
@@ -330,7 +340,7 @@ mod test {
     fn test_simple_symbols() {
         let code = r#"// this is a comment
 (( )){} // grouping stuff
-!*+-/=<> <= == // operators"#;
+!*+-/=<> <= ==!= // operators"#;
         let exp = TokenInfo {
             tokens: vec![
                 Token::new("(", false),
@@ -349,6 +359,7 @@ mod test {
                 Token::new(">", false),
                 Token::new("<=", false),
                 Token::new("==", false),
+                Token::new("!=", false),
                 Token::new("", false),
             ],
             tags: vec![
@@ -368,10 +379,11 @@ mod test {
                 TokenType::Greater,
                 TokenType::LessEqual,
                 TokenType::EqualEqual,
+                TokenType::BangEqual,
                 TokenType::Eof,
             ],
-            line_nrs: vec![2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
-            end_cols: vec![0, 1, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 7, 10, 13, 26],
+            line_nrs: vec![2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+            end_cols: vec![0, 1, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 7, 10, 13, 15, 28],
             errors: vec![],
         };
         let scan_res = Scanner::new(code).run();
@@ -383,51 +395,73 @@ mod test {
         assert!(scan_res.errors.is_empty());
     }
 
-    // #[test]
-    // fn test_simple_numbers() {
-    //     let code = r#"123 123.456 0.123"#;
-    //     let exp = vec![
-    //         Token::new(TokenType::Number, "123", true),
-    //         Token::new(TokenType::Number, "123.456", true),
-    //         Token::new(TokenType::Number, "0.123", true),
-    //         Token::new(TokenType::Eof, "", false),
-    //     ];
-    //     let mut scanner = Scanner::new(code).into_iter();
-    //     let mut idx = 0;
-    //     while let Some(token) = scanner.get_next_token() {
-    //         assert_eq!(exp[idx], token);
-    //         if token.tag == TokenType::Eof {
-    //             break;
-    //         }
-    //         idx += 1;
-    //     }
-    //     assert!(scanner.is_finished());
-    // }
-    //
-    // #[test]
-    // fn test_simple_idents() {
-    //     let code = r#"foo bar baz if and fun else or nil"#;
-    //     let exp = vec![
-    //         Token::new(TokenType::Identifier, "foo", false),
-    //         Token::new(TokenType::Identifier, "bar", false),
-    //         Token::new(TokenType::Identifier, "baz", false),
-    //         Token::new(TokenType::If, "if", false),
-    //         Token::new(TokenType::And, "and", false),
-    //         Token::new(TokenType::Fun, "fun", false),
-    //         Token::new(TokenType::Else, "else", false),
-    //         Token::new(TokenType::Or, "or", false),
-    //         Token::new(TokenType::Nil, "nil", false),
-    //         Token::new(TokenType::Eof, "", false),
-    //     ];
-    //     let mut scanner = Scanner::new(code).into_iter();
-    //     let mut idx = 0;
-    //     while let Some(token) = scanner.get_next_token() {
-    //         assert_eq!(exp[idx], token);
-    //         if token.tag == TokenType::Eof {
-    //             break;
-    //         }
-    //         idx += 1;
-    //     }
-    //     assert!(scanner.is_finished());
-    // }
+    #[test]
+    fn test_scan_simple_numbers() {
+        let code = r#"123 123.456 0.123"#;
+        let exp = TokenInfo {
+            tokens: vec![
+                Token::new("123", true),
+                Token::new("123.456", true),
+                Token::new("0.123", true),
+                Token::new("", false),
+            ],
+            tags: vec![
+                TokenType::Number,
+                TokenType::Number,
+                TokenType::Number,
+                TokenType::Eof,
+            ],
+            line_nrs: vec![1, 1, 1, 1],
+            end_cols: vec![2, 10, 15, 15],
+            errors: vec![],
+        };
+        let scan_res = Scanner::new(code).run();
+
+        assert_eq!(scan_res.tokens, exp.tokens);
+        assert_eq!(scan_res.tags, exp.tags);
+        assert_eq!(scan_res.end_cols, exp.end_cols);
+        assert_eq!(scan_res.line_nrs, exp.line_nrs);
+        assert!(scan_res.errors.is_empty());
+    }
+
+    #[test]
+    fn test_simple_idents() {
+        let code = r#"foo bar baz if and fun else or nil"#;
+        let exp = TokenInfo {
+            tokens: vec![
+                Token::new("foo", false),
+                Token::new("bar", false),
+                Token::new("baz", false),
+                Token::new("if", false),
+                Token::new("and", false),
+                Token::new("fun", false),
+                Token::new("else", false),
+                Token::new("or", false),
+                Token::new("nil", false),
+                Token::new("", false),
+            ],
+            tags: vec![
+                TokenType::Identifier,
+                TokenType::Identifier,
+                TokenType::Identifier,
+                TokenType::If,
+                TokenType::And,
+                TokenType::Fun,
+                TokenType::Else,
+                TokenType::Or,
+                TokenType::Nil,
+                TokenType::Eof,
+            ],
+            line_nrs: vec![1; 10],
+            end_cols: vec![2, 6, 10, 13, 17, 21, 26, 29, 32, 32],
+            errors: vec![],
+        };
+        let scan_res = Scanner::new(code).run();
+
+        assert_eq!(scan_res.tokens, exp.tokens);
+        assert_eq!(scan_res.tags, exp.tags);
+        assert_eq!(scan_res.end_cols, exp.end_cols);
+        assert_eq!(scan_res.line_nrs, exp.line_nrs);
+        assert!(scan_res.errors.is_empty());
+    }
 }

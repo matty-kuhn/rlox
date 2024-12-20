@@ -1,6 +1,7 @@
 mod ast;
-pub mod interpreter;
-pub mod macros;
 mod parser;
-pub mod scanner;
+mod scanner;
 mod tokens;
+
+pub mod macros;
+pub mod runner;

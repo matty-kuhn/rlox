@@ -40,20 +40,28 @@ impl Parser {
         }
     }
 
-    fn advance(&mut self) -> &Token {
-        if let Some(tok) = self.tokens.tokens.get(self.cursor) {
+    fn advance(&mut self) -> (&Token, &TokenType) {
+        if let (Some(tok), Some(tag)) = (
+            self.tokens.tokens.get(self.cursor),
+            self.tokens.tags.get(self.cursor),
+        ) {
             self.cursor += 1;
-            return tok;
+            return (tok, tag);
         }
-        self.tokens
-            .tokens
-            .get(self.cursor - 1)
-            .expect("should not yeat have reached end")
+        (
+            self.tokens
+                .tokens
+                .get(self.cursor - 1)
+                .expect("should not yeat have reached end"),
+            self.tokens
+                .tags
+                .get(self.cursor - 1)
+                .expect("should not yeat have reached end"),
+        )
     }
 
     fn equality(&mut self) -> Result<Expr> {
         let mut expr = self.comparison()?;
-
         while self.cursor < self.tokens.tokens.len() {
             if !self.tokens.tags[self.cursor].is_equality() {
                 break;
@@ -151,23 +159,19 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr> {
-        self.advance();
-        match self.tokens.tags[self.cursor] {
+        let curr = self.advance();
+        match curr.1 {
             TokenType::Nil => Ok(Expr::Literal(Lit::Nil)),
             TokenType::False => Ok(Expr::Literal(Lit::False)),
             TokenType::True => Ok(Expr::Literal(Lit::True)),
-            TokenType::Number => Ok(Expr::Literal(Lit::Num(
-                self.tokens.tokens[self.cursor].literal.clone(),
-            ))),
-            TokenType::String => Ok(Expr::Literal(Lit::Str(
-                self.tokens.tokens[self.cursor].literal.clone(),
-            ))),
+            TokenType::Number => Ok(Expr::Literal(Lit::Num(curr.0.literal.clone()))),
+            TokenType::String => Ok(Expr::Literal(Lit::Str(curr.0.literal.clone()))),
             TokenType::LeftParen => {
                 let expr = self.expression()?;
                 self.consume_next(TokenType::RightParen, "expected \")\" to close expression")?;
                 return Ok(Expr::Grouping(expr.into()));
             }
-            _ => panic!("invalid primary sequence"),
+            x => panic!("invalid primary sequence: {}", x),
         }
     }
 
@@ -181,7 +185,7 @@ impl Parser {
         }
 
         if self.tokens.tags[self.cursor] == tok_type {
-            return Ok(self.advance());
+            return Ok(self.advance().0);
         }
         let err_msg = err_msg!(
             self.tokens.line_nrs[self.cursor],
@@ -192,5 +196,20 @@ impl Parser {
         eprintln!("{err_msg}");
 
         bail!(err_msg)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{ast::printer::AstPrinter, scanner::Scanner};
+
+    use super::Parser;
+
+    #[test]
+    fn test_parse_simple_equality() {
+        let code = "(37 == 42) != (12 <6)";
+        let scan_res = Scanner::new(code).run();
+        let parse_res = Parser::new(scan_res).parse();
+        println!("{}", parse_res.unwrap().accept(&AstPrinter));
     }
 }

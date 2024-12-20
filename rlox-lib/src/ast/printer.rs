@@ -1,7 +1,7 @@
 use super::Visitor;
 
 #[derive(Default)]
-struct AstPrinter;
+pub(crate) struct AstPrinter;
 
 impl Visitor for AstPrinter {
     type Output = String;
